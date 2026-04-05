@@ -23,19 +23,90 @@ html, body {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif;
-  background: var(--bg);
+  background: #000;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Phone frame on desktop */
+.phone-frame {
+  width: 390px;
+  height: 100%;
+  max-height: 844px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* On actual mobile, fill the screen */
+@media (max-width: 430px) {
+  .phone-frame {
+    width: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+}
+
+/* On desktop, show device chrome */
+@media (min-width: 431px) {
+  .phone-frame {
+    border-radius: 44px;
+    box-shadow:
+      0 0 0 2px #333,
+      0 0 0 6px #1a1a1a,
+      0 0 0 8px #333,
+      0 20px 60px rgba(0, 0, 0, 0.5);
+    margin: 16px 0;
+  }
+
+  /* Dynamic Island */
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 34px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 50;
+  }
+
+  /* Home indicator */
+  .phone-frame::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 134px;
+    height: 5px;
+    background: #666;
+    border-radius: 3px;
+    z-index: 50;
+  }
+
+  /* Push content below dynamic island */
+  .home-header {
+    padding-top: 54px;
+  }
+
+  .thread-header {
+    padding-top: 54px;
+  }
 }
 
 #app {
   height: 100%;
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 
 /* ---- HOME VIEW ---- */
@@ -48,6 +119,7 @@ body {
 
 .home-header {
   padding: 16px 16px 8px;
+  padding-top: max(16px, env(safe-area-inset-top));
   flex-shrink: 0;
 }
 
@@ -175,6 +247,7 @@ body {
 .new-folder-btn {
   display: block;
   margin: 16px auto;
+  margin-bottom: max(16px, env(safe-area-inset-bottom));
   background: var(--bg-secondary);
   color: var(--yellow);
   border: none;
@@ -327,8 +400,11 @@ body {
   display: flex;
   align-items: center;
   padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--divider);
   flex-shrink: 0;
+  background: var(--bg);
+  z-index: 10;
 }
 
 .back-btn {
@@ -364,27 +440,28 @@ body {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px;
+  padding: 8px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .message {
-  align-self: stretch;
-  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .message-bubble {
   background: var(--yellow);
   color: var(--bubble-text);
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 18px 18px 4px 18px;
-  font-size: 15px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1.35;
   word-wrap: break-word;
   white-space: pre-wrap;
-  display: block;
+  display: inline-block;
+  max-width: 72%;
 }
 
 .message-time {
@@ -417,6 +494,7 @@ body {
   gap: 8px;
   flex-shrink: 0;
   background: var(--bg);
+  z-index: 10;
 }
 
 .input-bar textarea {

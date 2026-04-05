@@ -389,13 +389,7 @@ function renderThread(folderId) {
     sendBtn.disabled = !input.value.trim();
   });
 
-  // Send on Enter (Shift+Enter for newline)
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (input.value.trim()) sendMessage(folderId, input);
-    }
-  });
+  // Enter inserts newline; send via button only
 
   sendBtn.addEventListener('click', () => {
     if (input.value.trim()) sendMessage(folderId, input);
