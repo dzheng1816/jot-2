@@ -664,7 +664,7 @@ function renderThread(folderId) {
         ${messages.length === 0 ? `
           <div class="thread-empty">Jot your first thought...</div>
         ` : messages.map((m, i) => `
-          ${shouldShowTime(messages, i) ? `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(m.timestamp)}</div>` : ''}
+          ${shouldShowTime(messages, i) ? `<div class="message-time" >${formatMessageTime(m.timestamp)}</div>` : ''}
           ${renderMessageBubble(m)}
         `).join('')}
       </div>
@@ -716,38 +716,31 @@ function setupKeyboardHandler() {
   const threadView = document.getElementById('threadView');
   const inputBar = document.getElementById('inputBar');
   const container = document.getElementById('messagesContainer');
+  let prevHeight = window.visualViewport.height;
 
-  function onViewportResize() {
+  function onViewportChange() {
     const vv = window.visualViewport;
-    // Calculate keyboard height
-    const phoneFrame = document.querySelector('.phone-frame');
-    const frameRect = phoneFrame.getBoundingClientRect();
-    const keyboardHeight = frameRect.bottom - (vv.offsetTop + vv.height);
+    const keyboardHeight = window.innerHeight - vv.height;
 
     if (keyboardHeight > 50) {
-      // Keyboard is open
+      // Keyboard is open — shrink the thread view so input sits above keyboard
       inputBar.style.paddingBottom = '8px';
       threadView.style.height = vv.height + 'px';
-      threadView.style.position = 'fixed';
-      threadView.style.top = frameRect.top + 'px';
-      threadView.style.left = frameRect.left + 'px';
-      threadView.style.width = frameRect.width + 'px';
     } else {
-      // Keyboard is closed
+      // Keyboard closed — restore
       threadView.style.height = '';
-      threadView.style.position = '';
-      threadView.style.top = '';
-      threadView.style.left = '';
-      threadView.style.width = '';
       inputBar.style.paddingBottom = '';
     }
 
-    // Keep messages scrolled to bottom
-    container.scrollTop = container.scrollHeight;
+    // Scroll to bottom smoothly
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+
+    prevHeight = vv.height;
   }
 
-  window.visualViewport.addEventListener('resize', onViewportResize);
-  window.visualViewport.addEventListener('scroll', onViewportResize);
+  window.visualViewport.addEventListener('resize', onViewportChange);
 }
 
 // ---- Message swipe gestures ----
@@ -899,9 +892,13 @@ function sendMessage(folderId, input) {
 
   let html = '';
   if (showTime) {
-    html += `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(Date.now())}</div>`;
+    html += `<div class="message-time">${formatMessageTime(Date.now())}</div>`;
   }
-  html += renderMessageBubble(messages[messages.length - 1]);
+  const msg = messages[messages.length - 1];
+  const pinClass = msg.pinned ? ' pinned' : '';
+  html += `<div class="message${pinClass} msg-new" data-id="${msg.id}">
+    <div class="message-bubble">${escapeHtml(msg.text)}</div>
+  </div>`;
 
   container.insertAdjacentHTML('beforeend', html);
   container.scrollTop = container.scrollHeight;
@@ -981,7 +978,7 @@ function renderArchiveThread(folderId) {
         ${archived.length === 0 ? `
           <div class="thread-empty">No archived messages</div>
         ` : archived.map((m, i) => `
-          ${shouldShowTime(archived, i) ? `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(m.timestamp)}</div>` : ''}
+          ${shouldShowTime(archived, i) ? `<div class="message-time" >${formatMessageTime(m.timestamp)}</div>` : ''}
           <div class="message archived-message" data-id="${m.id}">
             <div class="message-bubble archived-bubble">${escapeHtml(m.text)}</div>
           </div>
