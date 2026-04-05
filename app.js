@@ -204,13 +204,16 @@ function renderHome() {
           const last = msgs[msgs.length - 1];
           return `
             <div class="folder-item" data-id="${f.id}">
-              <div class="folder-avatar">${f.emoji || '💭'}</div>
-              <div class="folder-info">
-                <div class="folder-top-row">
-                  <span class="folder-name">${escapeHtml(f.name)}</span>
-                  <span class="folder-time">${last ? formatTime(last.timestamp) : formatTime(f.createdAt)}</span>
+              <div class="folder-delete-action">Delete</div>
+              <div class="folder-item-inner">
+                <div class="folder-avatar">${f.emoji || '💭'}</div>
+                <div class="folder-info">
+                  <div class="folder-top-row">
+                    <span class="folder-name">${escapeHtml(f.name)}</span>
+                    <span class="folder-time">${last ? formatTime(last.timestamp) : formatTime(f.createdAt)}</span>
+                  </div>
+                  <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
                 </div>
-                <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
               </div>
             </div>`;
         }).join('')}
@@ -255,24 +258,39 @@ function setupFolderInteractions(folders) {
   let dragPlaceholder = null;
   let startY = 0;
   let offsetY = 0;
+  // Swipe state
+  let swipeEl = null;
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeDx = 0;
+  let isSwiping = false;
+  let swipeLocked = false;
 
   items.forEach(el => {
     el.addEventListener('touchstart', (e) => {
+      // Init swipe tracking
+      swipeEl = el;
+      swipeStartX = e.touches[0].clientX;
+      swipeStartY = e.touches[0].clientY;
+      swipeDx = 0;
+      isSwiping = false;
+      swipeLocked = false;
+
       longPressTimer = setTimeout(() => {
+        if (isSwiping) return; // Don't start drag if swiping
         e.preventDefault();
         dragging = true;
         dragEl = el;
+        swipeEl = null; // Cancel swipe
         const rect = el.getBoundingClientRect();
         startY = e.touches[0].clientY;
         offsetY = startY - rect.top;
 
-        // Create placeholder
         dragPlaceholder = document.createElement('div');
         dragPlaceholder.className = 'folder-item-placeholder';
         dragPlaceholder.style.height = rect.height + 'px';
         el.parentNode.insertBefore(dragPlaceholder, el);
 
-        // Make element float
         el.classList.add('folder-dragging');
         el.style.width = rect.width + 'px';
         el.style.top = (rect.top) + 'px';
@@ -282,6 +300,38 @@ function setupFolderInteractions(folders) {
     }, { passive: false });
 
     el.addEventListener('touchmove', (e) => {
+      // Handle swipe
+      if (swipeEl && !dragging) {
+        const dx = e.touches[0].clientX - swipeStartX;
+        const dy = e.touches[0].clientY - swipeStartY;
+
+        if (!isSwiping && !swipeLocked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+          if (Math.abs(dx) > Math.abs(dy) && dx < 0) {
+            isSwiping = true;
+            clearTimeout(longPressTimer);
+          } else {
+            swipeLocked = true; // vertical scroll, don't swipe
+            clearTimeout(longPressTimer);
+          }
+        }
+
+        if (isSwiping) {
+          e.preventDefault();
+          swipeDx = Math.max(-120, Math.min(0, dx));
+          const inner = el.querySelector('.folder-item-inner') || el;
+          inner.style.transform = `translateX(${swipeDx}px)`;
+          inner.style.transition = 'none';
+
+          // Show delete action behind
+          const deleteAction = el.querySelector('.folder-delete-action');
+          if (deleteAction) {
+            deleteAction.style.opacity = Math.min(1, Math.abs(swipeDx) / 60);
+          }
+          return;
+        }
+      }
+
+      // Handle drag reorder
       if (!dragging) {
         clearTimeout(longPressTimer);
         return;
@@ -290,7 +340,6 @@ function setupFolderInteractions(folders) {
       const y = e.touches[0].clientY;
       dragEl.style.top = (y - offsetY) + 'px';
 
-      // Find which item we're over
       const list = document.getElementById('folderList');
       const siblings = [...list.querySelectorAll('.folder-item:not(.folder-dragging), .folder-item-placeholder')];
       for (const sib of siblings) {
@@ -308,33 +357,83 @@ function setupFolderInteractions(folders) {
 
     el.addEventListener('touchend', () => {
       clearTimeout(longPressTimer);
-      if (!dragging) {
-        // Normal tap — navigate
-        navigate('#/thread/' + el.dataset.id);
+
+      // Handle swipe end
+      if (isSwiping && swipeEl) {
+        const inner = el.querySelector('.folder-item-inner') || el;
+        if (swipeDx < -60) {
+          // Show delete state
+          if (!el.classList.contains('folder-delete-ready')) {
+            el.classList.add('folder-delete-ready');
+            inner.style.transition = 'transform 0.25s ease';
+            inner.style.transform = 'translateX(-80px)';
+          } else {
+            // Already showing delete — second swipe deletes
+            inner.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            inner.style.transform = 'translateX(-400px)';
+            inner.style.opacity = '0';
+            const folderId = el.dataset.id;
+            setTimeout(() => {
+              Store.deleteFolder(folderId);
+              render();
+            }, 300);
+          }
+        } else {
+          // Snap back
+          el.classList.remove('folder-delete-ready');
+          inner.style.transition = 'transform 0.25s ease';
+          inner.style.transform = '';
+          const deleteAction = el.querySelector('.folder-delete-action');
+          if (deleteAction) deleteAction.style.opacity = '0';
+          setTimeout(() => { inner.style.transition = ''; }, 250);
+        }
+        isSwiping = false;
+        swipeEl = null;
         return;
       }
-      dragging = false;
 
-      // Put element back in list at placeholder position
-      const list = document.getElementById('folderList');
-      el.classList.remove('folder-dragging');
-      el.style.width = '';
-      el.style.top = '';
-      el.style.left = '';
-      if (dragPlaceholder && dragPlaceholder.parentNode) {
-        list.insertBefore(el, dragPlaceholder);
-        dragPlaceholder.remove();
+      // Handle drag end
+      if (dragging) {
+        dragging = false;
+        const list = document.getElementById('folderList');
+        el.classList.remove('folder-dragging');
+        el.style.width = '';
+        el.style.top = '';
+        el.style.left = '';
+        if (dragPlaceholder && dragPlaceholder.parentNode) {
+          list.insertBefore(el, dragPlaceholder);
+          dragPlaceholder.remove();
+        }
+        dragPlaceholder = null;
+        dragEl = null;
+
+        const newOrder = [...list.querySelectorAll('.folder-item')].map(item => item.dataset.id);
+        Store.saveFolderOrder(newOrder);
+        return;
       }
-      dragPlaceholder = null;
-      dragEl = null;
 
-      // Save new order
-      const newOrder = [...list.querySelectorAll('.folder-item')].map(item => item.dataset.id);
-      Store.saveFolderOrder(newOrder);
+      // Normal tap — navigate (unless delete-ready, then reset)
+      if (el.classList.contains('folder-delete-ready')) {
+        el.classList.remove('folder-delete-ready');
+        const inner = el.querySelector('.folder-item-inner') || el;
+        inner.style.transition = 'transform 0.25s ease';
+        inner.style.transform = '';
+        const deleteAction = el.querySelector('.folder-delete-action');
+        if (deleteAction) deleteAction.style.opacity = '0';
+        setTimeout(() => { inner.style.transition = ''; }, 250);
+        return;
+      }
+      navigate('#/thread/' + el.dataset.id);
     });
 
     el.addEventListener('touchcancel', () => {
       clearTimeout(longPressTimer);
+      if (isSwiping && swipeEl) {
+        const inner = el.querySelector('.folder-item-inner') || el;
+        inner.style.transition = 'transform 0.25s ease';
+        inner.style.transform = '';
+        setTimeout(() => { inner.style.transition = ''; }, 250);
+      }
       if (dragging && dragEl) {
         const list = document.getElementById('folderList');
         dragEl.classList.remove('folder-dragging');
@@ -347,11 +446,13 @@ function setupFolderInteractions(folders) {
         }
       }
       dragging = false;
+      isSwiping = false;
       dragPlaceholder = null;
       dragEl = null;
+      swipeEl = null;
     });
 
-    // Desktop: click to navigate (no long-press)
+    // Desktop: click to navigate
     el.addEventListener('click', (e) => {
       if (!('ontouchstart' in window)) {
         navigate('#/thread/' + el.dataset.id);
@@ -429,13 +530,16 @@ function renderFolderList(list, folders, allMessages) {
     const last = msgs[msgs.length - 1];
     return `
       <div class="folder-item" data-id="${f.id}">
-        <div class="folder-avatar">${f.emoji || '💭'}</div>
-        <div class="folder-info">
-          <div class="folder-top-row">
-            <span class="folder-name">${escapeHtml(f.name)}</span>
-            <span class="folder-time">${last ? formatTime(last.timestamp) : formatTime(f.createdAt)}</span>
+        <div class="folder-delete-action">Delete</div>
+        <div class="folder-item-inner">
+          <div class="folder-avatar">${f.emoji || '💭'}</div>
+          <div class="folder-info">
+            <div class="folder-top-row">
+              <span class="folder-name">${escapeHtml(f.name)}</span>
+              <span class="folder-time">${last ? formatTime(last.timestamp) : formatTime(f.createdAt)}</span>
+            </div>
+            <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
           </div>
-          <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
         </div>
       </div>`;
   }).join('');
@@ -555,7 +659,6 @@ function renderThread(folderId) {
       <div class="thread-header">
         <button class="back-btn" id="backBtn">← Back</button>
         <span class="thread-title">${escapeHtml(folder.name)}</span>
-        <button class="thread-delete-btn" id="deleteBtn">🗑</button>
       </div>
       <div class="messages" id="messagesContainer">
         ${messages.length === 0 ? `
@@ -578,10 +681,6 @@ function renderThread(folderId) {
 
   // Events
   document.getElementById('backBtn').addEventListener('click', () => navigate('#/'));
-
-  document.getElementById('deleteBtn').addEventListener('click', () => {
-    showDeleteConfirm(folder);
-  });
 
   const input = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
@@ -705,10 +804,13 @@ function setupMessageSwipe(folderId) {
     bubble.style.transform = `translateX(${currentX}px)`;
     bubble.style.transition = 'none';
 
-    // Show hint colors
+    // Show hint colors based on message state
+    const hintPinned = swipeEl.classList.contains('pinned');
     if (swipeDirection === 'right' && currentX > 60) {
-      swipeEl.style.background = 'rgba(224, 64, 64, 0.15)';
-    } else if (swipeDirection === 'left' && currentX < -60) {
+      // Right swipe: archive (yellow) or unpin (purple)
+      swipeEl.style.background = hintPinned ? 'rgba(245, 217, 106, 0.15)' : 'rgba(224, 64, 64, 0.15)';
+    } else if (swipeDirection === 'left' && currentX < -60 && !hintPinned) {
+      // Left swipe on yellow: pin hint
       swipeEl.style.background = 'rgba(160, 100, 255, 0.15)';
     } else {
       swipeEl.style.background = '';
@@ -725,24 +827,20 @@ function setupMessageSwipe(folderId) {
     const msgId = swipeEl.dataset.id;
     const isPinned = swipeEl.classList.contains('pinned');
 
-    if (swipeDirection === 'left' && currentX < -60) {
-      // Swipe left: toggle pin
-      if (isPinned) {
-        // Unpin
-        togglePin(folderId, msgId, false);
-        swipeEl.classList.remove('pinned');
-      } else {
-        // Pin
-        togglePin(folderId, msgId, true);
-        swipeEl.classList.add('pinned');
-      }
-    } else if (swipeDirection === 'right' && currentX > 60) {
-      // Swipe right: archive
+    if (swipeDirection === 'left' && currentX < -60 && !isPinned) {
+      // Swipe left on yellow: pin it (turn purple)
+      togglePin(folderId, msgId, true);
+      swipeEl.classList.add('pinned');
+    } else if (swipeDirection === 'right' && currentX > 60 && isPinned) {
+      // Swipe right on purple: unpin it (turn yellow)
+      togglePin(folderId, msgId, false);
+      swipeEl.classList.remove('pinned');
+    } else if (swipeDirection === 'right' && currentX > 60 && !isPinned) {
+      // Swipe right on yellow: archive
       bubble.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
       bubble.style.transform = 'translateX(400px)';
       bubble.style.opacity = '0';
       swipeEl.style.background = '';
-      const el = swipeEl;
       setTimeout(() => {
         Store.archiveMessage(folderId, msgId);
         renderThread(folderId);

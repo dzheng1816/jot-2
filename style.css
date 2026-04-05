@@ -208,16 +208,39 @@ body {
 }
 
 .folder-item {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--divider);
+  cursor: pointer;
+}
+
+.folder-item-inner {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--divider);
-  cursor: pointer;
-  transition: background 0.15s;
+  background: var(--bg);
+  position: relative;
+  z-index: 1;
 }
 
-.folder-item:active {
+.folder-item-inner:active {
   background: var(--bg-secondary);
+}
+
+.folder-delete-action {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: #e04040;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
 }
 
 .folder-avatar {
@@ -453,16 +476,6 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-}
-
-.thread-delete-btn {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
 }
 
 .messages {
