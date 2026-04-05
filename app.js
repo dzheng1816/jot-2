@@ -7,6 +7,23 @@ const Store = {
   saveFolders(folders) {
     localStorage.setItem('jot_folders', JSON.stringify(folders));
   },
+  getFolderOrder() {
+    return JSON.parse(localStorage.getItem('jot_folder_order') || 'null');
+  },
+  saveFolderOrder(order) {
+    localStorage.setItem('jot_folder_order', JSON.stringify(order));
+  },
+  getOrderedFolders() {
+    const folders = this.getFolders();
+    const order = this.getFolderOrder();
+    if (!order) return null; // no custom order yet
+    const map = {};
+    folders.forEach(f => map[f.id] = f);
+    const ordered = order.filter(id => map[id]).map(id => map[id]);
+    // Add any folders not in the order (new folders) at the top
+    folders.forEach(f => { if (!order.includes(f.id)) ordered.unshift(f); });
+    return ordered;
+  },
   getMessages(folderId) {
     const all = JSON.parse(localStorage.getItem('jot_messages') || '{}');
     return all[folderId] || [];
@@ -22,9 +39,56 @@ const Store = {
     const all = JSON.parse(localStorage.getItem('jot_messages') || '{}');
     delete all[folderId];
     localStorage.setItem('jot_messages', JSON.stringify(all));
+    // Clean up order
+    const order = this.getFolderOrder();
+    if (order) this.saveFolderOrder(order.filter(id => id !== folderId));
+    // Clean up archive
+    const archive = JSON.parse(localStorage.getItem('jot_archive') || '{}');
+    delete archive[folderId];
+    localStorage.setItem('jot_archive', JSON.stringify(archive));
   },
   getAllMessages() {
     return JSON.parse(localStorage.getItem('jot_messages') || '{}');
+  },
+  // Archive
+  getArchive(folderId) {
+    const all = JSON.parse(localStorage.getItem('jot_archive') || '{}');
+    return all[folderId] || [];
+  },
+  getAllArchive() {
+    return JSON.parse(localStorage.getItem('jot_archive') || '{}');
+  },
+  archiveMessage(folderId, messageId) {
+    const msgs = this.getMessages(folderId);
+    const idx = msgs.findIndex(m => m.id === messageId);
+    if (idx === -1) return;
+    const [msg] = msgs.splice(idx, 1);
+    this.saveMessages(folderId, msgs);
+    const all = JSON.parse(localStorage.getItem('jot_archive') || '{}');
+    if (!all[folderId]) all[folderId] = [];
+    all[folderId].push(msg);
+    localStorage.setItem('jot_archive', JSON.stringify(all));
+  },
+  restoreMessage(folderId, messageId) {
+    const all = JSON.parse(localStorage.getItem('jot_archive') || '{}');
+    const archived = all[folderId] || [];
+    const idx = archived.findIndex(m => m.id === messageId);
+    if (idx === -1) return;
+    const [msg] = archived.splice(idx, 1);
+    all[folderId] = archived;
+    if (archived.length === 0) delete all[folderId];
+    localStorage.setItem('jot_archive', JSON.stringify(all));
+    const msgs = this.getMessages(folderId);
+    msgs.push(msg);
+    msgs.sort((a, b) => a.timestamp - b.timestamp);
+    this.saveMessages(folderId, msgs);
+  },
+  permanentlyDeleteArchived(folderId, messageId) {
+    const all = JSON.parse(localStorage.getItem('jot_archive') || '{}');
+    const archived = all[folderId] || [];
+    all[folderId] = archived.filter(m => m.id !== messageId);
+    if (all[folderId].length === 0) delete all[folderId];
+    localStorage.setItem('jot_archive', JSON.stringify(all));
   }
 };
 
@@ -34,6 +98,12 @@ function getRoute() {
   const hash = location.hash || '#/';
   if (hash.startsWith('#/thread/')) {
     return { view: 'thread', id: hash.replace('#/thread/', '') };
+  }
+  if (hash === '#/archive') {
+    return { view: 'archive' };
+  }
+  if (hash.startsWith('#/archive/')) {
+    return { view: 'archive-thread', id: hash.replace('#/archive/', '') };
   }
   if (hash === '#/new') {
     return { view: 'new' };
@@ -84,6 +154,8 @@ function render() {
   switch (route.view) {
     case 'home': renderHome(); break;
     case 'thread': renderThread(route.id); break;
+    case 'archive': renderArchiveHome(); break;
+    case 'archive-thread': renderArchiveThread(route.id); break;
     default: renderHome();
   }
 }
@@ -91,22 +163,30 @@ function render() {
 // ---- Home View ----
 
 function renderHome() {
-  const folders = Store.getFolders();
   const allMessages = Store.getAllMessages();
+  const allArchive = Store.getAllArchive();
+  const hasArchive = Object.keys(allArchive).some(k => allArchive[k].length > 0);
 
-  // Sort folders by most recent message, then creation date
-  folders.sort((a, b) => {
-    const aMsgs = allMessages[a.id] || [];
-    const bMsgs = allMessages[b.id] || [];
-    const aTime = aMsgs.length ? aMsgs[aMsgs.length - 1].timestamp : a.createdAt;
-    const bTime = bMsgs.length ? bMsgs[bMsgs.length - 1].timestamp : b.createdAt;
-    return bTime - aTime;
-  });
+  // Use custom order if available, otherwise sort by recency
+  let folders = Store.getOrderedFolders();
+  if (!folders) {
+    folders = Store.getFolders();
+    folders.sort((a, b) => {
+      const aMsgs = allMessages[a.id] || [];
+      const bMsgs = allMessages[b.id] || [];
+      const aTime = aMsgs.length ? aMsgs[aMsgs.length - 1].timestamp : a.createdAt;
+      const bTime = bMsgs.length ? bMsgs[bMsgs.length - 1].timestamp : b.createdAt;
+      return bTime - aTime;
+    });
+  }
 
   app.innerHTML = `
     <div class="home-view">
       <div class="home-header">
-        <h1>Jot</h1>
+        <div class="home-header-row">
+          <h1>Jot</h1>
+          ${hasArchive ? `<button class="archive-btn" id="archiveBtn">🗑</button>` : ''}
+        </div>
         <div class="search-bar">
           <span class="search-icon">🔍</span>
           <input type="text" placeholder="Search thoughts..." id="searchInput" autocomplete="off">
@@ -140,9 +220,11 @@ function renderHome() {
   `;
 
   // Events
-  document.querySelectorAll('.folder-item').forEach(el => {
-    el.addEventListener('click', () => navigate('#/thread/' + el.dataset.id));
-  });
+  if (hasArchive) {
+    document.getElementById('archiveBtn').addEventListener('click', () => navigate('#/archive'));
+  }
+
+  setupFolderInteractions(folders);
 
   document.getElementById('newFolderBtn').addEventListener('click', showNewFolderModal);
 
@@ -160,6 +242,121 @@ function renderHome() {
     searchClear.classList.remove('visible');
     filterFolders('', folders, allMessages);
     searchInput.focus();
+  });
+}
+
+// ---- Folder long-press reorder ----
+
+function setupFolderInteractions(folders) {
+  const items = document.querySelectorAll('.folder-item');
+  let longPressTimer = null;
+  let dragging = false;
+  let dragEl = null;
+  let dragPlaceholder = null;
+  let startY = 0;
+  let offsetY = 0;
+
+  items.forEach(el => {
+    el.addEventListener('touchstart', (e) => {
+      longPressTimer = setTimeout(() => {
+        e.preventDefault();
+        dragging = true;
+        dragEl = el;
+        const rect = el.getBoundingClientRect();
+        startY = e.touches[0].clientY;
+        offsetY = startY - rect.top;
+
+        // Create placeholder
+        dragPlaceholder = document.createElement('div');
+        dragPlaceholder.className = 'folder-item-placeholder';
+        dragPlaceholder.style.height = rect.height + 'px';
+        el.parentNode.insertBefore(dragPlaceholder, el);
+
+        // Make element float
+        el.classList.add('folder-dragging');
+        el.style.width = rect.width + 'px';
+        el.style.top = (rect.top) + 'px';
+        el.style.left = rect.left + 'px';
+        document.body.appendChild(el);
+      }, 500);
+    }, { passive: false });
+
+    el.addEventListener('touchmove', (e) => {
+      if (!dragging) {
+        clearTimeout(longPressTimer);
+        return;
+      }
+      e.preventDefault();
+      const y = e.touches[0].clientY;
+      dragEl.style.top = (y - offsetY) + 'px';
+
+      // Find which item we're over
+      const list = document.getElementById('folderList');
+      const siblings = [...list.querySelectorAll('.folder-item:not(.folder-dragging), .folder-item-placeholder')];
+      for (const sib of siblings) {
+        const r = sib.getBoundingClientRect();
+        if (y > r.top && y < r.bottom && sib !== dragPlaceholder) {
+          if (y < r.top + r.height / 2) {
+            list.insertBefore(dragPlaceholder, sib);
+          } else {
+            list.insertBefore(dragPlaceholder, sib.nextSibling);
+          }
+          break;
+        }
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchend', () => {
+      clearTimeout(longPressTimer);
+      if (!dragging) {
+        // Normal tap — navigate
+        navigate('#/thread/' + el.dataset.id);
+        return;
+      }
+      dragging = false;
+
+      // Put element back in list at placeholder position
+      const list = document.getElementById('folderList');
+      el.classList.remove('folder-dragging');
+      el.style.width = '';
+      el.style.top = '';
+      el.style.left = '';
+      if (dragPlaceholder && dragPlaceholder.parentNode) {
+        list.insertBefore(el, dragPlaceholder);
+        dragPlaceholder.remove();
+      }
+      dragPlaceholder = null;
+      dragEl = null;
+
+      // Save new order
+      const newOrder = [...list.querySelectorAll('.folder-item')].map(item => item.dataset.id);
+      Store.saveFolderOrder(newOrder);
+    });
+
+    el.addEventListener('touchcancel', () => {
+      clearTimeout(longPressTimer);
+      if (dragging && dragEl) {
+        const list = document.getElementById('folderList');
+        dragEl.classList.remove('folder-dragging');
+        dragEl.style.width = '';
+        dragEl.style.top = '';
+        dragEl.style.left = '';
+        if (dragPlaceholder && dragPlaceholder.parentNode) {
+          list.insertBefore(dragEl, dragPlaceholder);
+          dragPlaceholder.remove();
+        }
+      }
+      dragging = false;
+      dragPlaceholder = null;
+      dragEl = null;
+    });
+
+    // Desktop: click to navigate (no long-press)
+    el.addEventListener('click', (e) => {
+      if (!('ontouchstart' in window)) {
+        navigate('#/thread/' + el.dataset.id);
+      }
+    });
   });
 }
 
@@ -326,12 +523,21 @@ function createFolder(name, emoji) {
     emoji,
     createdAt: Date.now()
   };
-  folders.push(folder);
+  folders.unshift(folder);
   Store.saveFolders(folders);
-  navigate('#/thread/' + folder.id);
+  // Save explicit order now that user has folders
+  Store.saveFolderOrder(folders.map(f => f.id));
+  render();
 }
 
 // ---- Thread View ----
+
+function renderMessageBubble(m) {
+  const pinClass = m.pinned ? ' pinned' : '';
+  return `<div class="message${pinClass}" data-id="${m.id}">
+    <div class="message-bubble">${escapeHtml(m.text)}</div>
+  </div>`;
+}
 
 function renderThread(folderId) {
   const folders = Store.getFolders();
@@ -345,7 +551,7 @@ function renderThread(folderId) {
   const messages = Store.getMessages(folderId);
 
   app.innerHTML = `
-    <div class="thread-view">
+    <div class="thread-view" id="threadView">
       <div class="thread-header">
         <button class="back-btn" id="backBtn">← Back</button>
         <span class="thread-title">${escapeHtml(folder.name)}</span>
@@ -356,12 +562,10 @@ function renderThread(folderId) {
           <div class="thread-empty">Jot your first thought...</div>
         ` : messages.map((m, i) => `
           ${shouldShowTime(messages, i) ? `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(m.timestamp)}</div>` : ''}
-          <div class="message">
-            <div class="message-bubble">${escapeHtml(m.text)}</div>
-          </div>
+          ${renderMessageBubble(m)}
         `).join('')}
       </div>
-      <div class="input-bar">
+      <div class="input-bar" id="inputBar">
         <textarea id="messageInput" placeholder="Jot something..." rows="1"></textarea>
         <button class="send-btn" id="sendBtn" disabled><span>↑</span></button>
       </div>
@@ -395,8 +599,179 @@ function renderThread(folderId) {
     if (input.value.trim()) sendMessage(folderId, input);
   });
 
+  // Setup swipe gestures on messages
+  setupMessageSwipe(folderId);
+
+  // Setup keyboard viewport handling
+  setupKeyboardHandler();
+
   // Focus input
   input.focus();
+}
+
+// ---- Keyboard viewport handling ----
+
+function setupKeyboardHandler() {
+  if (!window.visualViewport) return;
+
+  const threadView = document.getElementById('threadView');
+  const inputBar = document.getElementById('inputBar');
+  const container = document.getElementById('messagesContainer');
+
+  function onViewportResize() {
+    const vv = window.visualViewport;
+    // Calculate keyboard height
+    const phoneFrame = document.querySelector('.phone-frame');
+    const frameRect = phoneFrame.getBoundingClientRect();
+    const keyboardHeight = frameRect.bottom - (vv.offsetTop + vv.height);
+
+    if (keyboardHeight > 50) {
+      // Keyboard is open
+      inputBar.style.paddingBottom = '8px';
+      threadView.style.height = vv.height + 'px';
+      threadView.style.position = 'fixed';
+      threadView.style.top = frameRect.top + 'px';
+      threadView.style.left = frameRect.left + 'px';
+      threadView.style.width = frameRect.width + 'px';
+    } else {
+      // Keyboard is closed
+      threadView.style.height = '';
+      threadView.style.position = '';
+      threadView.style.top = '';
+      threadView.style.left = '';
+      threadView.style.width = '';
+      inputBar.style.paddingBottom = '';
+    }
+
+    // Keep messages scrolled to bottom
+    container.scrollTop = container.scrollHeight;
+  }
+
+  window.visualViewport.addEventListener('resize', onViewportResize);
+  window.visualViewport.addEventListener('scroll', onViewportResize);
+}
+
+// ---- Message swipe gestures ----
+
+function setupMessageSwipe(folderId) {
+  const container = document.getElementById('messagesContainer');
+  let swipeEl = null;
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let swiping = false;
+  let swipeDirection = null;
+
+  container.addEventListener('touchstart', (e) => {
+    const msgEl = e.target.closest('.message');
+    if (!msgEl) return;
+    swipeEl = msgEl;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = 0;
+    swiping = false;
+    swipeDirection = null;
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!swipeEl) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    // Determine direction on first significant movement
+    if (!swiping && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        swiping = true;
+        swipeDirection = dx > 0 ? 'right' : 'left';
+      } else {
+        // Vertical scroll — abort swipe
+        swipeEl = null;
+        return;
+      }
+    }
+
+    if (!swiping) return;
+    e.preventDefault();
+    currentX = dx;
+
+    // Only allow intended direction
+    if (swipeDirection === 'left' && dx > 0) currentX = 0;
+    if (swipeDirection === 'right' && dx < 0) currentX = 0;
+
+    // Cap swipe distance
+    currentX = Math.max(-120, Math.min(120, currentX));
+
+    const bubble = swipeEl.querySelector('.message-bubble');
+    bubble.style.transform = `translateX(${currentX}px)`;
+    bubble.style.transition = 'none';
+
+    // Show hint colors
+    if (swipeDirection === 'right' && currentX > 60) {
+      swipeEl.style.background = 'rgba(224, 64, 64, 0.15)';
+    } else if (swipeDirection === 'left' && currentX < -60) {
+      swipeEl.style.background = 'rgba(160, 100, 255, 0.15)';
+    } else {
+      swipeEl.style.background = '';
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchend', () => {
+    if (!swipeEl || !swiping) {
+      if (swipeEl) swipeEl = null;
+      return;
+    }
+
+    const bubble = swipeEl.querySelector('.message-bubble');
+    const msgId = swipeEl.dataset.id;
+    const isPinned = swipeEl.classList.contains('pinned');
+
+    if (swipeDirection === 'left' && currentX < -60) {
+      // Swipe left: toggle pin
+      if (isPinned) {
+        // Unpin
+        togglePin(folderId, msgId, false);
+        swipeEl.classList.remove('pinned');
+      } else {
+        // Pin
+        togglePin(folderId, msgId, true);
+        swipeEl.classList.add('pinned');
+      }
+    } else if (swipeDirection === 'right' && currentX > 60) {
+      // Swipe right: archive
+      bubble.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      bubble.style.transform = 'translateX(400px)';
+      bubble.style.opacity = '0';
+      swipeEl.style.background = '';
+      const el = swipeEl;
+      setTimeout(() => {
+        Store.archiveMessage(folderId, msgId);
+        renderThread(folderId);
+      }, 300);
+      swipeEl = null;
+      return;
+    }
+
+    // Snap back
+    bubble.style.transition = 'transform 0.25s ease';
+    bubble.style.transform = '';
+    swipeEl.style.background = '';
+    setTimeout(() => {
+      if (bubble) bubble.style.transition = '';
+    }, 250);
+
+    swipeEl = null;
+    swiping = false;
+    swipeDirection = null;
+  });
+}
+
+function togglePin(folderId, messageId, pinned) {
+  const messages = Store.getMessages(folderId);
+  const msg = messages.find(m => m.id === messageId);
+  if (msg) {
+    msg.pinned = pinned;
+    Store.saveMessages(folderId, messages);
+  }
 }
 
 function sendMessage(folderId, input) {
@@ -428,16 +803,202 @@ function sendMessage(folderId, input) {
   if (showTime) {
     html += `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(Date.now())}</div>`;
   }
-  html += `
-    <div class="message">
-      <div class="message-bubble">${escapeHtml(text)}</div>
-    </div>
-  `;
+  html += renderMessageBubble(messages[messages.length - 1]);
 
   container.insertAdjacentHTML('beforeend', html);
   container.scrollTop = container.scrollHeight;
 
   input.focus();
+}
+
+// ---- Archive Views ----
+
+function renderArchiveHome() {
+  const folders = Store.getFolders();
+  const allArchive = Store.getAllArchive();
+
+  const foldersWithArchive = folders.filter(f => {
+    const archived = allArchive[f.id];
+    return archived && archived.length > 0;
+  });
+
+  app.innerHTML = `
+    <div class="home-view">
+      <div class="home-header">
+        <div class="home-header-row">
+          <button class="back-btn" id="archiveBackBtn">← Back</button>
+          <h1 class="archive-title">Archive</h1>
+        </div>
+      </div>
+      <div class="folder-list" id="folderList">
+        ${foldersWithArchive.length === 0 ? `
+          <div class="empty-state">
+            <div class="empty-icon">🗑</div>
+            <p>No archived messages.</p>
+          </div>
+        ` : foldersWithArchive.map(f => {
+          const archived = allArchive[f.id] || [];
+          const last = archived[archived.length - 1];
+          return `
+            <div class="folder-item" data-id="${f.id}">
+              <div class="folder-avatar">${f.emoji || '💭'}</div>
+              <div class="folder-info">
+                <div class="folder-top-row">
+                  <span class="folder-name">${escapeHtml(f.name)}</span>
+                  <span class="folder-time">${archived.length} archived</span>
+                </div>
+                <div class="folder-preview">${last ? escapeHtml(last.text) : ''}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('archiveBackBtn').addEventListener('click', () => navigate('#/'));
+
+  document.querySelectorAll('.folder-item').forEach(el => {
+    el.addEventListener('click', () => navigate('#/archive/' + el.dataset.id));
+  });
+}
+
+function renderArchiveThread(folderId) {
+  const folders = Store.getFolders();
+  const folder = folders.find(f => f.id === folderId);
+
+  if (!folder) {
+    navigate('#/archive');
+    return;
+  }
+
+  const archived = Store.getArchive(folderId);
+
+  app.innerHTML = `
+    <div class="thread-view">
+      <div class="thread-header">
+        <button class="back-btn" id="backBtn">← Back</button>
+        <span class="thread-title">${escapeHtml(folder.name)} - Archive</span>
+      </div>
+      <div class="messages" id="messagesContainer">
+        ${archived.length === 0 ? `
+          <div class="thread-empty">No archived messages</div>
+        ` : archived.map((m, i) => `
+          ${shouldShowTime(archived, i) ? `<div class="message-time" style="text-align: center; color: var(--text-muted); font-size: 11px; margin: 12px 0 4px;">${formatMessageTime(m.timestamp)}</div>` : ''}
+          <div class="message archived-message" data-id="${m.id}">
+            <div class="message-bubble archived-bubble">${escapeHtml(m.text)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('backBtn').addEventListener('click', () => navigate('#/archive'));
+
+  // Swipe gestures for archive: left to restore, right to permanently delete
+  setupArchiveSwipe(folderId);
+}
+
+function setupArchiveSwipe(folderId) {
+  const container = document.getElementById('messagesContainer');
+  let swipeEl = null;
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let swiping = false;
+  let swipeDirection = null;
+
+  container.addEventListener('touchstart', (e) => {
+    const msgEl = e.target.closest('.archived-message');
+    if (!msgEl) return;
+    swipeEl = msgEl;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = 0;
+    swiping = false;
+    swipeDirection = null;
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (!swipeEl) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    if (!swiping && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        swiping = true;
+        swipeDirection = dx > 0 ? 'right' : 'left';
+      } else {
+        swipeEl = null;
+        return;
+      }
+    }
+
+    if (!swiping) return;
+    e.preventDefault();
+    currentX = dx;
+    if (swipeDirection === 'left' && dx > 0) currentX = 0;
+    if (swipeDirection === 'right' && dx < 0) currentX = 0;
+    currentX = Math.max(-120, Math.min(120, currentX));
+
+    const bubble = swipeEl.querySelector('.message-bubble');
+    bubble.style.transform = `translateX(${currentX}px)`;
+    bubble.style.transition = 'none';
+
+    if (swipeDirection === 'left' && currentX < -60) {
+      swipeEl.style.background = 'rgba(245, 217, 106, 0.15)';
+    } else if (swipeDirection === 'right' && currentX > 60) {
+      swipeEl.style.background = 'rgba(224, 64, 64, 0.15)';
+    } else {
+      swipeEl.style.background = '';
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchend', () => {
+    if (!swipeEl || !swiping) {
+      swipeEl = null;
+      return;
+    }
+
+    const bubble = swipeEl.querySelector('.message-bubble');
+    const msgId = swipeEl.dataset.id;
+
+    if (swipeDirection === 'left' && currentX < -60) {
+      // Restore message
+      bubble.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      bubble.style.transform = 'translateX(-400px)';
+      bubble.style.opacity = '0';
+      swipeEl.style.background = '';
+      setTimeout(() => {
+        Store.restoreMessage(folderId, msgId);
+        renderArchiveThread(folderId);
+      }, 300);
+      swipeEl = null;
+      return;
+    } else if (swipeDirection === 'right' && currentX > 60) {
+      // Permanently delete
+      bubble.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+      bubble.style.transform = 'translateX(400px)';
+      bubble.style.opacity = '0';
+      swipeEl.style.background = '';
+      setTimeout(() => {
+        Store.permanentlyDeleteArchived(folderId, msgId);
+        renderArchiveThread(folderId);
+      }, 300);
+      swipeEl = null;
+      return;
+    }
+
+    bubble.style.transition = 'transform 0.25s ease';
+    bubble.style.transform = '';
+    swipeEl.style.background = '';
+    setTimeout(() => {
+      if (bubble) bubble.style.transition = '';
+    }, 250);
+
+    swipeEl = null;
+    swiping = false;
+    swipeDirection = null;
+  });
 }
 
 // ---- Delete Confirmation ----

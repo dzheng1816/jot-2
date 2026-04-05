@@ -9,6 +9,7 @@
   --bg: #1a1a1a;
   --bg-secondary: #2a2a2a;
   --yellow: #f5d96a;
+  --purple: #a064ff;
   --text-primary: #e0e0e0;
   --text-secondary: #888;
   --text-muted: #666;
@@ -92,11 +93,11 @@ body {
 
   /* Push content below dynamic island */
   .home-header {
-    padding-top: 54px;
+    padding-top: 54px !important;
   }
 
   .thread-header {
-    padding-top: 54px;
+    padding-top: 54px !important;
   }
 }
 
@@ -119,15 +120,43 @@ body {
 
 .home-header {
   padding: 16px 16px 8px;
-  padding-top: max(16px, env(safe-area-inset-top));
   flex-shrink: 0;
+}
+
+.home-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .home-header h1 {
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 12px;
+}
+
+.archive-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+  text-align: center;
+  margin-right: 40px;
+}
+
+.archive-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.archive-btn:active {
+  opacity: 1;
 }
 
 .search-bar {
@@ -400,11 +429,11 @@ body {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--divider);
   flex-shrink: 0;
   background: var(--bg);
   z-index: 10;
+  position: relative;
 }
 
 .back-btn {
@@ -570,6 +599,45 @@ body {
 .delete-btn {
   background: #e04040 !important;
   color: #fff !important;
+}
+
+/* ---- PINNED MESSAGES ---- */
+
+.message.pinned {
+  justify-content: flex-start;
+}
+
+.message.pinned .message-bubble {
+  background: var(--purple);
+  color: #fff;
+  border-radius: 18px 18px 18px 4px;
+}
+
+/* ---- FOLDER DRAG REORDER ---- */
+
+.folder-item-placeholder {
+  background: var(--bg-secondary);
+  opacity: 0.3;
+  border-bottom: 1px solid var(--divider);
+}
+
+.folder-item.folder-dragging {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  transform: scale(1.04);
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+/* ---- ARCHIVED MESSAGES ---- */
+
+.archived-message .archived-bubble {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 18px;
 }
 
 /* ---- SEARCH RESULTS ---- */
