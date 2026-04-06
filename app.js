@@ -659,6 +659,7 @@ function renderThread(folderId) {
       <div class="thread-header">
         <button class="back-btn" id="backBtn">← Back</button>
         <span class="thread-title">${escapeHtml(folder.name)}</span>
+        <button class="focus-btn" id="focusBtn">◎</button>
       </div>
       <div class="messages" id="messagesContainer">
         ${messages.length === 0 ? `
@@ -704,8 +705,86 @@ function renderThread(folderId) {
   // Setup keyboard viewport handling
   setupKeyboardHandler();
 
+  // Focus mode
+  setupFocusMode(folderId);
+
   // Focus input
   input.focus();
+}
+
+// ---- Focus Mode ----
+
+function setupFocusMode(folderId) {
+  const focusBtn = document.getElementById('focusBtn');
+  let focusActive = false;
+  let overlay = null;
+
+  focusBtn.addEventListener('click', () => {
+    if (focusActive) {
+      exitFocusMode();
+    } else {
+      enterFocusMode();
+    }
+  });
+
+  function enterFocusMode() {
+    const messages = Store.getMessages(folderId);
+    const pinned = messages.filter(m => m.pinned);
+
+    if (pinned.length === 0) return; // nothing to focus on
+
+    focusActive = true;
+    focusBtn.classList.add('focus-active');
+
+    // Create overlay
+    overlay = document.createElement('div');
+    overlay.className = 'focus-overlay';
+    overlay.innerHTML = `
+      <div class="focus-backdrop"></div>
+      <div class="focus-content">
+        ${pinned.map(m => `
+          <div class="focus-message">
+            <div class="focus-bubble">${escapeHtml(m.text)}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    const threadView = document.getElementById('threadView');
+    threadView.appendChild(overlay);
+
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      overlay.classList.add('focus-visible');
+    });
+
+    // Exit on backdrop tap
+    overlay.querySelector('.focus-backdrop').addEventListener('click', exitFocusMode);
+  }
+
+  function exitFocusMode() {
+    if (!overlay) return;
+    focusActive = false;
+    focusBtn.classList.remove('focus-active');
+
+    overlay.classList.remove('focus-visible');
+    overlay.classList.add('focus-exiting');
+
+    overlay.addEventListener('transitionend', () => {
+      if (overlay && overlay.parentNode) {
+        overlay.remove();
+      }
+      overlay = null;
+    }, { once: true });
+
+    // Fallback removal
+    setTimeout(() => {
+      if (overlay && overlay.parentNode) {
+        overlay.remove();
+        overlay = null;
+      }
+    }, 400);
+  }
 }
 
 // ---- Keyboard viewport handling ----

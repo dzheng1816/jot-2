@@ -717,6 +717,117 @@ body {
   color: #fff !important;
 }
 
+/* ---- FOCUS MODE ---- */
+
+.focus-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s var(--ease-out), transform 0.15s var(--ease-out);
+  line-height: 1;
+}
+
+.focus-btn:active {
+  transform: scale(0.88);
+}
+
+.focus-btn.focus-active {
+  color: var(--purple);
+}
+
+.focus-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.focus-overlay.focus-visible {
+  pointer-events: auto;
+}
+
+.focus-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  transition: background 0.25s var(--ease-out), backdrop-filter 0.25s var(--ease-out), -webkit-backdrop-filter 0.25s var(--ease-out);
+}
+
+.focus-visible .focus-backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.focus-exiting .focus-backdrop {
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+}
+
+.focus-content {
+  position: relative;
+  z-index: 1;
+  width: 78%;
+  max-width: 320px;
+  max-height: 70%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  background: rgba(42, 42, 42, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transform: scale(0.9) translateY(16px);
+  transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-spring);
+}
+
+.focus-visible .focus-content {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.focus-exiting .focus-content {
+  opacity: 0;
+  transform: scale(0.92) translateY(10px);
+  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+}
+
+.focus-message {
+  display: flex;
+  justify-content: center;
+}
+
+.focus-bubble {
+  background: var(--purple);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  box-shadow: 0 2px 8px rgba(160, 100, 255, 0.2);
+}
+
 /* ---- PINNED MESSAGES ---- */
 
 .message.pinned {
