@@ -185,11 +185,11 @@ function renderHome() {
       <div class="home-header">
         <div class="home-header-row">
           <h1>Jot</h1>
-          ${hasArchive ? `<button class="archive-btn" id="archiveBtn">🗑</button>` : ''}
+          ${hasArchive ? `<button class="archive-btn" id="archiveBtn"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>` : ''}
         </div>
         <div class="search-bar">
-          <span class="search-icon">🔍</span>
-          <input type="text" placeholder="Search thoughts..." id="searchInput" autocomplete="off">
+          <span class="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></span>
+          <input type="text" placeholder="Search" id="searchInput" autocomplete="off">
           <span class="search-clear" id="searchClear">✕</span>
         </div>
       </div>
@@ -214,11 +214,12 @@ function renderHome() {
                   </div>
                   <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
                 </div>
+                <span class="folder-chevron">›</span>
               </div>
             </div>`;
         }).join('')}
       </div>
-      <button class="new-folder-btn" id="newFolderBtn">+ New Folder</button>
+      <button class="new-folder-btn" id="newFolderBtn">New Folder</button>
     </div>
   `;
 
@@ -540,6 +541,7 @@ function renderFolderList(list, folders, allMessages) {
             </div>
             <div class="folder-preview">${last ? escapeHtml(last.text) : 'No messages yet'}</div>
           </div>
+          <span class="folder-chevron">›</span>
         </div>
       </div>`;
   }).join('');
@@ -657,21 +659,21 @@ function renderThread(folderId) {
   app.innerHTML = `
     <div class="thread-view" id="threadView">
       <div class="thread-header">
-        <button class="back-btn" id="backBtn">← Back</button>
+        <button class="back-btn" id="backBtn"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
         <span class="thread-title">${escapeHtml(folder.name)}</span>
-        <button class="focus-btn" id="focusBtn">◎</button>
+        <button class="focus-btn" id="focusBtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>
       </div>
       <div class="messages" id="messagesContainer">
         ${messages.length === 0 ? `
           <div class="thread-empty">Jot your first thought...</div>
         ` : messages.map((m, i) => `
-          ${shouldShowTime(messages, i) ? `<div class="message-time" >${formatMessageTime(m.timestamp)}</div>` : ''}
+          ${shouldShowTime(messages, i) ? `<div class="message-time">${formatMessageTime(m.timestamp)}</div>` : ''}
           ${renderMessageBubble(m)}
         `).join('')}
       </div>
       <div class="input-bar" id="inputBar">
         <textarea id="messageInput" placeholder="Jot something..." rows="1"></textarea>
-        <button class="send-btn" id="sendBtn" disabled><span>↑</span></button>
+        <button class="send-btn" id="sendBtn" disabled><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
       </div>
     </div>
   `;
@@ -1000,8 +1002,8 @@ function renderArchiveHome() {
     <div class="home-view">
       <div class="home-header">
         <div class="home-header-row">
-          <button class="back-btn" id="archiveBackBtn">← Back</button>
-          <h1 class="archive-title">Archive</h1>
+          <button class="back-btn" id="archiveBackBtn"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <span class="archive-title">Archive</span>
         </div>
       </div>
       <div class="folder-list" id="folderList">
@@ -1050,8 +1052,8 @@ function renderArchiveThread(folderId) {
   app.innerHTML = `
     <div class="thread-view">
       <div class="thread-header">
-        <button class="back-btn" id="backBtn">← Back</button>
-        <span class="thread-title">${escapeHtml(folder.name)} - Archive</span>
+        <button class="back-btn" id="backBtn"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span class="thread-title">${escapeHtml(folder.name)} · Archive</span>
       </div>
       <div class="messages" id="messagesContainer">
         ${archived.length === 0 ? `
