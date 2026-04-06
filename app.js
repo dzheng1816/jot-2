@@ -794,34 +794,51 @@ function setupFocusMode(folderId) {
 function setupKeyboardHandler() {
   if (!window.visualViewport) return;
 
+  const threadView = document.getElementById('threadView');
   const inputBar = document.getElementById('inputBar');
   const container = document.getElementById('messagesContainer');
+  const header = threadView.querySelector('.thread-header');
   let keyboardOpen = false;
+  let rafId = null;
 
   function onViewportChange() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(updateLayout);
+  }
+
+  function updateLayout() {
     const vv = window.visualViewport;
-    const keyboardHeight = window.innerHeight - vv.height;
+    // How much the keyboard is covering
+    const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
     const isOpen = keyboardHeight > 50;
 
     if (isOpen) {
-      // Keyboard covers the safe area — remove bottom padding
+      // Keyboard is open: shrink the thread view to fit visible area
+      // This keeps header fixed at top, composer at bottom of visible area
+      threadView.style.height = vv.height + 'px';
+      // Remove safe-area bottom padding since keyboard covers it
       inputBar.style.paddingBottom = '6px';
 
       if (!keyboardOpen) {
         keyboardOpen = true;
-        // Scroll to bottom when keyboard first opens
-        requestAnimationFrame(() => {
-          container.scrollTop = container.scrollHeight;
-        });
       }
-    } else if (keyboardOpen) {
-      // Keyboard closing — restore safe area padding
+      // Always keep scrolled to bottom while keyboard is adjusting
+      container.scrollTop = container.scrollHeight;
+    } else {
+      // Keyboard closed: restore natural layout
+      threadView.style.height = '';
       inputBar.style.paddingBottom = '';
-      keyboardOpen = false;
+
+      if (keyboardOpen) {
+        keyboardOpen = false;
+        container.scrollTop = container.scrollHeight;
+      }
     }
   }
 
+  // Listen to both resize and scroll for smooth tracking
   window.visualViewport.addEventListener('resize', onViewportChange);
+  window.visualViewport.addEventListener('scroll', onViewportChange);
 }
 
 // ---- Message swipe gestures ----
