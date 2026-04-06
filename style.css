@@ -34,7 +34,7 @@ body {
   justify-content: center;
 }
 
-@media (min-width: 431px) {
+@media (min-width: 431px) and (display-mode: browser) {
   body {
     background: #000;
   }
@@ -42,7 +42,7 @@ body {
 
 /* ---- PHONE FRAME ---- */
 
-/* Mobile-first: fill the entire screen */
+/* Mobile-first: fill the entire screen, no chrome */
 .phone-frame {
   width: 100%;
   height: 100%;
@@ -51,8 +51,8 @@ body {
   background: var(--bg);
 }
 
-/* Desktop: constrain to phone-sized preview */
-@media (min-width: 431px) {
+/* Desktop browser (not standalone): show phone-shaped preview */
+@media (min-width: 431px) and (display-mode: browser) {
   .phone-frame {
     width: 390px;
     max-height: 844px;
