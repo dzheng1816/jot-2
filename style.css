@@ -45,12 +45,6 @@ body {
   justify-content: center;
 }
 
-@media (min-width: 431px) and (display-mode: browser) {
-  body {
-    background: #000;
-  }
-}
-
 /* ---- PHONE FRAME ---- */
 
 .phone-frame {
@@ -59,55 +53,6 @@ body {
   position: relative;
   overflow: hidden;
   background: var(--bg);
-}
-
-/* Desktop browser only: phone preview shell */
-@media (min-width: 431px) and (display-mode: browser) {
-  .phone-frame {
-    width: 390px;
-    max-height: 844px;
-    border-radius: 44px;
-    box-shadow:
-      0 0 0 2px #333,
-      0 0 0 6px #1a1a1a,
-      0 0 0 8px #333,
-      0 20px 60px rgba(0, 0, 0, 0.5);
-    margin: 16px 0;
-  }
-
-  .phone-frame::before {
-    content: '';
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 120px;
-    height: 34px;
-    background: #000;
-    border-radius: 20px;
-    z-index: 50;
-  }
-
-  .phone-frame::after {
-    content: '';
-    position: absolute;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 134px;
-    height: 5px;
-    background: #666;
-    border-radius: 3px;
-    z-index: 50;
-  }
-
-  .home-header {
-    padding-top: 54px !important;
-  }
-
-  .thread-header {
-    padding-top: 54px !important;
-  }
 }
 
 /* ---- APP CONTAINER ---- */
