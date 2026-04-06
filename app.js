@@ -795,31 +795,43 @@ function setupKeyboardHandler() {
   const threadView = document.getElementById('threadView');
   const inputBar = document.getElementById('inputBar');
   const container = document.getElementById('messagesContainer');
-  let prevHeight = window.visualViewport.height;
+  let keyboardOpen = false;
 
   function onViewportChange() {
     const vv = window.visualViewport;
     const keyboardHeight = window.innerHeight - vv.height;
 
     if (keyboardHeight > 50) {
-      // Keyboard is open — shrink the thread view so input sits above keyboard
-      inputBar.style.paddingBottom = '8px';
+      // Keyboard open — offset the entire thread view up by keyboard height
+      // and remove safe area padding since keyboard covers the bottom
       threadView.style.height = vv.height + 'px';
+      inputBar.style.paddingBottom = '6px';
+      inputBar.style.transition = 'none';
+
+      if (!keyboardOpen) {
+        keyboardOpen = true;
+        // Scroll to bottom after keyboard settles
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+          });
+        });
+      }
     } else {
-      // Keyboard closed — restore
+      // Keyboard closed
       threadView.style.height = '';
       inputBar.style.paddingBottom = '';
+      inputBar.style.transition = '';
+      keyboardOpen = false;
     }
 
-    // Scroll to bottom smoothly
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-    });
-
-    prevHeight = vv.height;
+    // Keep messages scrolled to bottom during keyboard resize
+    container.scrollTop = container.scrollHeight;
   }
 
+  // Use both resize and scroll events on visualViewport for smooth tracking
   window.visualViewport.addEventListener('resize', onViewportChange);
+  window.visualViewport.addEventListener('scroll', onViewportChange);
 }
 
 // ---- Message swipe gestures ----

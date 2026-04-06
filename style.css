@@ -513,6 +513,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  will-change: height;
 }
 
 .thread-header {
@@ -633,6 +634,7 @@ body {
   flex-shrink: 0;
   background: var(--bg);
   z-index: 10;
+  will-change: padding-bottom;
 }
 
 .input-bar textarea {
